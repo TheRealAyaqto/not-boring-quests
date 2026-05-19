@@ -39,7 +39,8 @@ async function startServer() {
         Give me 3 different ways to complete it. 
         One should be the most efficient "Best" way. 
         The other two should be creative, fun, or "least boring" ways to do it. 
-        Make them sound exciting and adventurous.`,
+        CRITICAL: All methods must be simple, easy to understand, and practical. 
+        Make them sound exciting and adventurous but keep them grounded in reality.`,
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
@@ -48,7 +49,7 @@ async function startServer() {
               type: Type.OBJECT,
               properties: {
                 title: { type: Type.STRING, description: 'Short catchy title for the idea' },
-                description: { type: Type.STRING, description: 'Detailed description of the approach' },
+                description: { type: Type.STRING, description: 'Detailed, simple, and easy to understand description of the approach' },
                 vibe: { type: Type.STRING, description: 'A one-word mood for this approach (e.g. Zen, Epic, Speedrun)' },
               },
               required: ['title', 'description', 'vibe'],
@@ -76,7 +77,8 @@ async function startServer() {
         model: 'gemini-3-flash-preview',
         contents: `Task: "${task}"
         Chosen Approach: "${idea.title} - ${idea.description}"
-        Generate 3-5 simple, easy-to-follow steps to complete this task using this specific approach. 
+        Generate 3-5 VERY simple, easy-to-follow steps to complete this task using this specific approach. 
+        CRITICAL: Keep the steps extremely clear, jargon-free, and easy for anyone to understand.
         Keep the steps brief but encouraging.`,
         config: {
           responseMimeType: 'application/json',

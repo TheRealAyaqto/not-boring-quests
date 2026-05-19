@@ -5,13 +5,47 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, Trash2, Zap, Sparkles, CheckCircle2, RotateCcw, ArrowRight, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Zap, Sparkles, CheckCircle2, RotateCcw, ArrowRight, Loader2, LogIn, User as UserIcon, Trophy } from 'lucide-react';
 import { suggestIdeas, generateSteps, Idea } from './services/geminiService';
+import { loginWithGoogle, syncUserXP, addXP, auth, addTaskToDB, removeTaskFromDB, subscribeToTasks } from './lib/firebase';
+import { onAuthStateChanged, User } from 'firebase/auth';
 
 interface Task {
   id: string;
   text: string;
 }
+
+const TAGLINES = [
+  "Productivity at it's finest",
+  "Just press the button!",
+  "Trust me this is funner (is that a word?)",
+  "Add some tasks!",
+  "This is cool right?",
+  "Make sure you login to save XP!"
+];
+
+const LEVEL_TITLES = [
+  "Mundane Novice",
+  "Chore Specialist",
+  "Errand Expert",
+  "Task Tactician",
+  "Focus Master",
+  "Discipline Dean",
+  "Productivity Pro",
+  "Routine Wizard",
+  "Habit Hero",
+  "Boring Legend",
+  "Persistence Paragon",
+  "Order Overlord",
+  "Steadfast Sentinel",
+  "Consistency King",
+  "Execution Emperor",
+  "Discipline Deity",
+  "The Unborable",
+  "Legend of the List",
+  "Archon of Action",
+  "Apex Order"
+];
 
 export default function App() {
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -22,23 +56,81 @@ export default function App() {
   const [steps, setSteps] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [phase, setPhase] = useState<'list' | 'picking' | 'ideas' | 'steps'>('list');
+  
+  const [user, setUser] = useState<User | null>(null);
+  const [xp, setXp] = useState(0);
+  const [taglineIndex, setTaglineIndex] = useState(0);
 
-  const addTask = () => {
+  const level = Math.floor(xp / 100) + 1;
+  const currentLevelXp = xp % 100;
+  const levelTitle = LEVEL_TITLES[Math.min(level - 1, LEVEL_TITLES.length - 1)];
+
+  useEffect(() => {
+    const taglineTimer = setInterval(() => {
+      setTaglineIndex(prev => (prev + 1) % TAGLINES.length);
+    }, 10000);
+    return () => clearInterval(taglineTimer);
+  }, []);
+
+  useEffect(() => {
+    let unsubscribeTasks: () => void;
+    
+    const unsubscribeAuth = onAuthStateChanged(auth, async (u) => {
+      if (unsubscribeTasks) unsubscribeTasks();
+      
+      setUser(u);
+      if (u) {
+        const currentXP = await syncUserXP(u.uid, u.email || '');
+        setXp(currentXP);
+        
+        unsubscribeTasks = subscribeToTasks(u.uid, (dbTasks) => {
+          setTasks(dbTasks);
+        });
+      } else {
+        setTasks([]);
+      }
+    });
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeTasks) unsubscribeTasks();
+    };
+  }, []);
+
+  const handleLogin = async () => {
+    try {
+      const u = await loginWithGoogle();
+      const currentXP = await syncUserXP(u.uid, u.email || '');
+      setXp(currentXP);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const addTask = async () => {
     if (newTask.trim()) {
-      setTasks([...tasks, { id: crypto.randomUUID(), text: newTask.trim() }]);
+      if (user) {
+        await addTaskToDB(user.uid, newTask.trim());
+      } else {
+        // Fallback for guest (though user implied login is important)
+        setTasks([...tasks, { id: crypto.randomUUID(), text: newTask.trim() }]);
+      }
       setNewTask('');
     }
   };
 
-  const removeTask = (id: string) => {
-    setTasks(tasks.filter(t => t.id !== id));
+  const removeTask = async (id: string) => {
+    if (user) {
+      await removeTaskFromDB(user.uid, id);
+    } else {
+      setTasks(tasks.filter(t => t.id !== id));
+    }
   };
 
   const startQuest = async () => {
     if (tasks.length === 0) return;
     
     setPhase('picking');
-    // Simulate some "random picking" animation time
     await new Promise(r => setTimeout(r, 1500));
     
     const randomTask = tasks[Math.floor(Math.random() * tasks.length)];
@@ -71,6 +163,20 @@ export default function App() {
     }
   };
 
+  const completeQuest = async () => {
+    if (selectedTask) {
+      if (user) {
+        await addXP(user.uid, 20);
+        await removeTaskFromDB(user.uid, selectedTask.id);
+        setXp(prev => prev + 20);
+      } else {
+        setXp(prev => prev + 20);
+        setTasks(prev => prev.filter(t => t.id !== selectedTask.id));
+      }
+      reset();
+    }
+  };
+
   const reset = () => {
     setSelectedTask(null);
     setIdeas([]);
@@ -81,13 +187,65 @@ export default function App() {
 
   return (
     <div className="min-h-screen p-4 md:p-8 flex flex-col items-center">
+      <div className="w-full max-w-2xl flex justify-between items-start mb-8">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-4">
+            <div className="w-48 h-8 bg-zinc-900 brutal-border relative overflow-hidden">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${currentLevelXp}%` }}
+                className="absolute inset-0 bg-primary"
+              />
+              <div className="absolute inset-0 flex items-center justify-center mix-blend-difference">
+                 <span className="font-mono font-bold text-[10px] text-white">
+                   {currentLevelXp}/100 XP
+                 </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 bg-primary px-3 py-1 brutal-border">
+               <Trophy size={14} className="text-black" />
+               <span className="font-mono font-bold text-xs text-black">LVL {level}</span>
+            </div>
+          </div>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-zinc-500 italic">
+             "Level {level}: {levelTitle}"
+          </p>
+        </div>
+        
+        {user ? (
+          <div className="flex items-center gap-3 font-mono text-xs text-zinc-500 bg-zinc-900/50 px-3 py-1.5 rounded-full">
+            <img src={user.photoURL || ''} className="w-5 h-5 rounded-full border border-zinc-700" referrerPolicy="no-referrer" />
+            <span className="hidden sm:inline">{user.email}</span>
+            <button onClick={() => auth.signOut()} className="hover:text-primary underline">Logout</button>
+          </div>
+        ) : (
+          <button 
+            onClick={handleLogin}
+            className="flex items-center gap-2 font-mono text-xs uppercase text-zinc-400 hover:text-primary transition-colors"
+          >
+            <LogIn size={14} />
+            Login to Sync XP & Tasks
+          </button>
+        )}
+      </div>
+
       <header className="mb-12 text-center w-full max-w-2xl">
         <h1 className="font-display text-5xl md:text-7xl mb-2 tracking-tighter text-primary">
-          QUEST LOG
+          (not)BoringQuests
         </h1>
-        <p className="text-zinc-400 font-mono text-sm uppercase tracking-widest">
-          Turn Boring tasks into Epic Adventures
-        </p>
+        <div className="h-6 flex items-center justify-center">
+          <AnimatePresence mode="wait">
+            <motion.p
+              key={taglineIndex}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="text-zinc-400 font-mono text-sm uppercase tracking-widest italic"
+            >
+              {TAGLINES[taglineIndex]}
+            </motion.p>
+          </AnimatePresence>
+        </div>
       </header>
 
       <main className="w-full max-w-2xl flex-grow">
@@ -142,10 +300,14 @@ export default function App() {
 
               {tasks.length > 0 && (
                 <div className="flex justify-center pt-8">
-                  <button onClick={startQuest} className="primary-button flex items-center gap-3">
-                    <Zap size={24} fill="currentColor" />
-                    RANDOM TASK QUEST
-                  </button>
+                  <motion.button
+                    whileHover={{ scale: 1.1, rotate: 15 }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={startQuest}
+                    className="w-24 h-24 rounded-full bg-primary text-black flex items-center justify-center brutal-border hover:bg-accent transition-colors shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]"
+                  >
+                    <Zap size={40} fill="currentColor" />
+                  </motion.button>
                 </div>
               )}
             </motion.div>
@@ -169,8 +331,8 @@ export default function App() {
                   <Sparkles size={48} className="text-accent animate-pulse" />
                 </div>
               </div>
-              <h2 className="font-display text-4xl mb-4 italic text-accent">SELECTING TARGET...</h2>
-              <p className="font-mono text-zinc-500">Consulting the Grand Archive of Quests</p>
+              <h2 className="font-display text-4xl mb-4 italic text-accent">CHOOSING TASK...</h2>
+              <p className="font-mono text-zinc-500">Consulting Gemini (might take a while)</p>
             </motion.div>
           )}
 
@@ -247,10 +409,10 @@ export default function App() {
               <div className="flex flex-col gap-4 pt-10">
                 <button
                   className="bg-accent text-black font-display text-xl p-4 flex items-center justify-center gap-2 brutal-border"
-                  onClick={reset}
+                  onClick={completeQuest}
                 >
                   <CheckCircle2 size={24} />
-                  QUEST COMPLETE
+                  QUEST COMPLETE (+20 XP)
                 </button>
                 <button
                   className="text-zinc-500 font-mono text-sm uppercase hover:text-white flex items-center justify-center gap-2"
@@ -267,7 +429,7 @@ export default function App() {
 
       <footer className="mt-20 py-8 border-t border-zinc-900 w-full max-w-2xl text-center">
         <p className="font-mono text-[10px] text-zinc-700 tracking-widest uppercase">
-          Powered by Gemini AI • Forge Your Own Path
+          POWERED BY GEMINI AI ♥︎ • DATABASE HELD BY FIREBASE ♥︎
         </p>
       </footer>
     </div>

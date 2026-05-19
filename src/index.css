@@ -6,8 +6,8 @@
   --font-display: "Anton", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
-  --color-primary: #FF5F1F; /* Neon Orange */
-  --color-accent: #39FF14;  /* Neon Green */
+  --color-primary: #BDE0FE; /* Pastel Blue */
+  --color-accent: #A2D2FF;  /* Deeper Pastel Blue */
 }
 
 @layer base {

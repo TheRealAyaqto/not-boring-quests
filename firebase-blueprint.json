@@ -1,0 +1,36 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user quest progress and XP",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID" },
+        "xp": { "type": "number", "description": "Current experience points" },
+        "email": { "type": "string", "description": "User email address" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "xp"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "User to-do item",
+      "type": "object",
+      "properties": {
+        "text": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["text"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile document"
+    },
+    "/users/{userId}/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "User tasks"
+    }
+  }
+}
