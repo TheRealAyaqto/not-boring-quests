@@ -1,0 +1,25 @@
+@import url('https://fonts.googleapis.com/css2?family=Anton&family=Inter:wght@400;600;800&family=JetBrains+Mono&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Anton", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-primary: #FF5F1F; /* Neon Orange */
+  --color-accent: #39FF14;  /* Neon Green */
+}
+
+@layer base {
+  body {
+    @apply bg-zinc-950 text-zinc-100 font-sans;
+  }
+}
+
+@utility brutal-border {
+  @apply border-2 border-zinc-100 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)];
+}
+
+@utility primary-button {
+  @apply bg-primary text-black font-display text-xl px-8 py-4 hover:bg-accent transition-colors brutal-border;
+}

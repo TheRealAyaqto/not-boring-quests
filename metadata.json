@@ -1,0 +1,6 @@
+{
+  "name": "QuestLog: Boring-to-Epic",
+  "description": "An AI-powered to-do list that turns mundane tasks into exciting quests using Gemini.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
