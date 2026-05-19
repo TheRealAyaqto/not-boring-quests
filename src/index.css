@@ -6,20 +6,53 @@
   --font-display: "Anton", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
-  --color-primary: #BDE0FE; /* Pastel Blue */
-  --color-accent: #A2D2FF;  /* Deeper Pastel Blue */
+  --color-primary: var(--primary-color, #BDE0FE); /* Pastel Blue */
+  --color-accent: var(--accent-color, #A2D2FF);  /* Deeper Pastel Blue */
+  --color-brutal-bg: #09090b;
+  --color-brutal-text: #f4f4f5;
 }
 
 @layer base {
   body {
-    @apply bg-zinc-950 text-zinc-100 font-sans;
+    @apply bg-brutal-bg text-brutal-text font-sans transition-colors duration-300;
   }
 }
 
+.light-mode {
+  --color-brutal-bg: #ffffff;
+  --color-brutal-text: #09090b;
+  --color-primary: #A2D2FF;
+  --color-accent: #BDE0FE;
+}
+
+.light-mode .bg-zinc-900 {
+  @apply bg-zinc-100 border-zinc-200;
+}
+
+.light-mode .bg-zinc-900\/50 {
+  @apply bg-zinc-50 border-zinc-200;
+}
+
+.light-mode .text-zinc-500 {
+  @apply text-zinc-400;
+}
+
+.light-mode .text-zinc-400 {
+  @apply text-zinc-600;
+}
+
+.light-mode .border-zinc-700 {
+  @apply border-zinc-300;
+}
+
+.light-mode .border-zinc-800 {
+  @apply border-zinc-200;
+}
+
 @utility brutal-border {
-  @apply border-2 border-zinc-100 shadow-[4px_4px_0px_0px_rgba(255,255,255,1)];
+  @apply border-2 border-current shadow-[4px_4px_0px_0px_currentColor] transition-all;
 }
 
 @utility primary-button {
-  @apply bg-primary text-black font-display text-xl px-8 py-4 hover:bg-accent transition-colors brutal-border;
+  @apply bg-primary text-black font-display text-xl px-8 py-4 hover:bg-accent transition-colors brutal-border shadow-[4px_4px_0px_0px_currentColor];
 }

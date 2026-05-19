@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
-import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, serverTimestamp, collection, addDoc, deleteDoc, getDocs, orderBy, query, onSnapshot } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, updateDoc, increment, serverTimestamp, collection, addDoc, deleteDoc, getDocs, orderBy, query, onSnapshot, where } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const app = initializeApp(firebaseConfig);
@@ -18,21 +18,32 @@ export async function loginWithGoogle() {
   }
 }
 
-export async function syncUserXP(uid: string, email: string) {
+export async function syncUserXP(uid: string, email: string, displayName?: string | null, photoURL?: string | null) {
   const userRef = doc(db, 'users', uid);
   const userSnap = await getDoc(userRef);
   
+  const profileData = {
+    uid,
+    email,
+    displayName: displayName || email.split('@')[0],
+    photoURL: photoURL || null,
+    updatedAt: new Date().toISOString()
+  };
+
   if (!userSnap.exists()) {
-    await setDoc(userRef, {
-      uid,
-      email,
+    const newUser = {
+      ...profileData,
       xp: 0,
-      updatedAt: new Date().toISOString()
-    });
-    return 0;
+      hiddenFromLeaderboard: false
+    };
+    await setDoc(userRef, newUser);
+    return newUser;
   }
   
-  return userSnap.data().xp as number;
+  // Update profile info but keep XP and hidden status
+  await setDoc(userRef, profileData, { merge: true });
+  const finalSnap = await getDoc(userRef);
+  return finalSnap.data();
 }
 
 export async function addXP(uid: string, amount: number) {
@@ -43,10 +54,33 @@ export async function addXP(uid: string, amount: number) {
   });
 }
 
-export async function addTaskToDB(uid: string, text: string) {
+export async function updatePrivacySettings(uid: string, hidden: boolean) {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, {
+    hiddenFromLeaderboard: hidden
+  });
+}
+
+export async function getLeaderboard() {
+  const usersRef = collection(db, 'users');
+  const q = query(
+    usersRef, 
+    where('hiddenFromLeaderboard', '==', false),
+    orderBy('xp', 'desc')
+  );
+  
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  }));
+}
+
+export async function addTaskToDB(uid: string, text: string, rarity: string) {
   const tasksRef = collection(db, 'users', uid, 'tasks');
   const docRef = await addDoc(tasksRef, {
     text,
+    rarity,
     createdAt: new Date().toISOString()
   });
   return docRef.id;

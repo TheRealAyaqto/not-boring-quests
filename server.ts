@@ -16,14 +16,23 @@ async function startServer() {
 
   app.use(express.json());
 
-  const ai = new GoogleGenAI({
-    apiKey: process.env.GEMINI_API_KEY || '',
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build',
+  // Helper to get Gemini client
+  const getAiClient = (userKey?: string) => {
+    return new GoogleGenAI({
+      apiKey: userKey || process.env.GEMINI_API_KEY || '',
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
       },
-    },
-  });
+    });
+  };
+
+  const defaultAi = getAiClient();
+
+  // Simple in-memory cache
+  const ideaCache = new Map<string, any>();
+  const stepsCache = new Map<string, any>();
 
   // API Routes
   app.post('/api/suggest-ideas', async (req, res) => {
@@ -31,6 +40,15 @@ async function startServer() {
     if (!task) {
       return res.status(400).json({ error: 'Task is required' });
     }
+
+    const cacheKey = task.toLowerCase().trim();
+    if (ideaCache.has(cacheKey)) {
+      console.log('Serving ideas from cache for:', cacheKey);
+      return res.json(ideaCache.get(cacheKey));
+    }
+
+    const userKey = req.get('X-Gemini-API-Key');
+    const ai = getAiClient(userKey);
 
     try {
       const response = await ai.models.generateContent({
@@ -59,10 +77,39 @@ async function startServer() {
       });
 
       const ideas = JSON.parse(response.text || '[]');
+      if (ideas.length > 0) {
+        ideaCache.set(cacheKey, ideas);
+      }
       res.json(ideas);
     } catch (error: any) {
-      console.error('Gemini error:', error);
-      res.status(500).json({ error: error.message });
+      if (error.message?.includes('429')) {
+        console.warn('Gemini Quota Exceeded (429). Using fallbacks.');
+      } else {
+        console.error('Gemini error:', error);
+      }
+      
+      // Fallback ideas if API fails (Quota limit or otherwise)
+      const fallbackIdeas = [
+        {
+          title: "The Speedrun",
+          description: `Complete "${task}" as fast as humanly possible. Set a 5-minute timer and race against it!`,
+          vibe: "Blitz",
+          isFallback: true
+        },
+        {
+          title: "The Deep Focus",
+          description: `Put on some lo-fi beats and treat "${task}" with extreme precision and craftsmanship.`,
+          vibe: "Zen",
+          isFallback: true
+        },
+        {
+          title: "The Hero's Method",
+          description: `Narrate your actions as if you are the protagonist in an epic RPG completing a critical quest.`,
+          vibe: "Epic",
+          isFallback: true
+        }
+      ];
+      res.json(fallbackIdeas);
     }
   });
 
@@ -71,6 +118,15 @@ async function startServer() {
     if (!task || !idea) {
       return res.status(400).json({ error: 'Task and Idea are required' });
     }
+
+    const cacheKey = `${task}-${idea.title}`.toLowerCase().trim();
+    if (stepsCache.has(cacheKey)) {
+      console.log('Serving steps from cache for:', cacheKey);
+      return res.json(stepsCache.get(cacheKey));
+    }
+
+    const userKey = req.get('X-Gemini-API-Key');
+    const ai = getAiClient(userKey);
 
     try {
       const response = await ai.models.generateContent({
@@ -90,10 +146,26 @@ async function startServer() {
       });
 
       const steps = JSON.parse(response.text || '[]');
+      if (steps.length > 0) {
+        stepsCache.set(cacheKey, steps);
+      }
       res.json(steps);
     } catch (error: any) {
-      console.error('Gemini error:', error);
-      res.status(500).json({ error: error.message });
+      if (error.message?.includes('429')) {
+        console.warn('Gemini Quota Exceeded (429). Using fallbacks.');
+      } else {
+        console.error('Gemini error:', error);
+      }
+      
+      // Fallback steps
+      const fallbackSteps = [
+        "Gather your necessary equipment and tools.",
+        "Clear your immediate area of distractions.",
+        `Begin the task: "${task}".`,
+        "Process each component carefully and efficiently.",
+        "Finalize and appreciate your hard work!"
+      ];
+      res.json(fallbackSteps);
     }
   });
 
