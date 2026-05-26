@@ -7,7 +7,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
+const __filename = fileURLToPath(import.meta.url || `file://${path.resolve('server.ts')}`);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
@@ -166,6 +166,49 @@ async function startServer() {
         "Finalize and appreciate your hard work!"
       ];
       res.json(fallbackSteps);
+    }
+  });
+
+  app.post('/api/determine-rarity', async (req, res) => {
+    const { task } = req.body;
+    if (!task) {
+      return res.status(400).json({ error: 'Task is required' });
+    }
+
+    const userKey = req.get('X-Gemini-API-Key');
+    const ai = getAiClient(userKey);
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Task: "${task}"
+        Determine the "rarity" of this task. A boring, fast, or common household task is "Common". 
+        A slightly annoying or lengthy task is "Uncommon". 
+        A major project or chore that takes hours is "Rare". 
+        Something very difficult, life-changing, or taking weeks is "Epic". 
+        Something nearly impossible, legendary, or massively impactful is "Legendary".
+        Return only the rarity level name.`,
+        config: {
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              rarity: { 
+                type: Type.STRING, 
+                enum: ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'],
+                description: 'The rarity level of the task' 
+              }
+            },
+            required: ['rarity'],
+          },
+        },
+      });
+
+      const data = JSON.parse(response.text || '{"rarity": "Common"}');
+      res.json({ rarity: data.rarity });
+    } catch (error: any) {
+      console.error('Gemini error:', error);
+      res.json({ rarity: 'Common' }); // Fallback
     }
   });
 

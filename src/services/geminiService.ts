@@ -34,3 +34,19 @@ export async function generateSteps(task: string, idea: Idea, apiKey?: string): 
   }
   return response.json();
 }
+
+export async function determineRarity(task: string, apiKey?: string): Promise<string> {
+  const response = await fetch('/api/determine-rarity', {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      ...(apiKey ? { 'X-Gemini-API-Key': apiKey } : {})
+    },
+    body: JSON.stringify({ task }),
+  });
+  if (!response.ok) {
+    throw new Error('Failed to determine rarity');
+  }
+  const data = await response.json();
+  return data.rarity;
+}

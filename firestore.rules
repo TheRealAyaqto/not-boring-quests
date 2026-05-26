@@ -30,8 +30,8 @@ service cloud.firestore {
 
     // User Profile Rules
     match /users/{userId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
+      allow list: if true;
+      allow get: if true;
       allow create, update: if isOwner(userId);
       
       // Tasks subcollection

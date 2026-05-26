@@ -6,7 +6,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Minus, Trash2, Zap, Sparkles, CheckCircle2, RotateCcw, ArrowRight, Loader2, LogIn, User as UserIcon, Trophy, Settings, Sun, Moon, X, Crown, ShieldAlert, CircleHelp, ExternalLink } from 'lucide-react';
-import { suggestIdeas, generateSteps, Idea } from './services/geminiService';
+import { suggestIdeas, generateSteps, determineRarity, Idea } from './services/geminiService';
 import { loginWithGoogle, syncUserXP, addXP, auth, addTaskToDB, removeTaskFromDB, subscribeToTasks, getLeaderboard, updatePrivacySettings } from './lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
@@ -22,16 +22,6 @@ const RARITIES = {
   Rare: { name: 'Rare', color: '#2196F3', weight: 10, xp: 75 },
   Epic: { name: 'Epic', color: '#9C27B0', weight: 4, xp: 150 },
   Legendary: { name: 'Legendary', color: '#FF9800', weight: 1, xp: 500 }
-};
-
-const getRandomRarity = (): keyof typeof RARITIES => {
-  const roll = Math.random() * 100;
-  let cumulative = 0;
-  for (const [key, value] of Object.entries(RARITIES)) {
-    cumulative += value.weight;
-    if (roll <= cumulative) return key as keyof typeof RARITIES;
-  }
-  return 'Common';
 };
 
 const TAGLINES = [
@@ -91,6 +81,7 @@ export default function App() {
   const [accentColor, setAccentColor] = useState(localStorage.getItem('custom_accent_color') || '#BDE0FE');
   const [geminiApiKey, setGeminiApiKey] = useState(localStorage.getItem('user_gemini_api_key') || '');
   const [debugXpAmount, setDebugXpAmount] = useState(1500);
+  const [isAddingTask, setIsAddingTask] = useState(false);
 
   const level = Math.floor(xp / 100) + 1;
   const currentLevelXp = xp % 100;
@@ -156,6 +147,17 @@ export default function App() {
       return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
     };
     document.documentElement.style.setProperty('--accent-color', darken(accentColor));
+    
+    const getContrastText = (hex: string) => {
+      if (!hex || hex.length < 7) return '#000000';
+      let r = parseInt(hex.slice(1, 3), 16);
+      let g = parseInt(hex.slice(3, 5), 16);
+      let b = parseInt(hex.slice(5, 7), 16);
+      const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+      return (yiq >= 128) ? '#000000' : '#ffffff';
+    };
+    document.documentElement.style.setProperty('--primary-text', getContrastText(accentColor));
+    
     localStorage.setItem('custom_accent_color', accentColor);
   }, [accentColor]);
 
@@ -197,14 +199,30 @@ export default function App() {
 
   const addTask = async () => {
     if (newTask.trim()) {
-      const rarity = getRandomRarity();
-      if (user) {
-        await addTaskToDB(user.uid, newTask.trim(), rarity);
-      } else {
-        // Fallback for guest (though user implied login is important)
-        setTasks([...tasks, { id: crypto.randomUUID(), text: newTask.trim(), rarity }]);
+      setIsAddingTask(true);
+      try {
+        const rarity = await determineRarity(newTask.trim(), geminiApiKey) as keyof typeof RARITIES;
+        const finalRarity = RARITIES[rarity] ? rarity : 'Common';
+        
+        if (user) {
+          await addTaskToDB(user.uid, newTask.trim(), finalRarity);
+        } else {
+          // Fallback for guest
+          setTasks([...tasks, { id: crypto.randomUUID(), text: newTask.trim(), rarity: finalRarity }]);
+        }
+        setNewTask('');
+      } catch (err) {
+        console.error('Failed to get rarity, adding as Common', err);
+        const fbRarity = 'Common';
+        if (user) {
+          await addTaskToDB(user.uid, newTask.trim(), fbRarity);
+        } else {
+          setTasks([...tasks, { id: crypto.randomUUID(), text: newTask.trim(), rarity: fbRarity }]);
+        }
+        setNewTask('');
+      } finally {
+        setIsAddingTask(false);
       }
-      setNewTask('');
     }
   };
 
@@ -329,14 +347,20 @@ export default function App() {
                   <h3 className="font-mono text-xs text-zinc-500 uppercase tracking-widest">Theme</h3>
                   <div className="grid grid-cols-2 gap-4">
                     <button 
-                      onClick={() => setTheme('light')}
-                      className={`flex items-center gap-2 justify-center p-3 brutal-border ${theme === 'light' ? 'bg-primary text-black' : 'bg-zinc-900'}`}
+                      onClick={() => {
+                        setTheme('light');
+                        setAccentColor('#000000');
+                      }}
+                      className={`flex items-center gap-2 justify-center p-3 brutal-border ${theme === 'light' ? 'bg-primary text-primary-text' : 'bg-zinc-900'}`}
                     >
                       <Sun size={16} /> Light
                     </button>
                     <button 
-                      onClick={() => setTheme('dark')}
-                      className={`flex items-center gap-2 justify-center p-3 brutal-border ${theme === 'dark' ? 'bg-primary text-black' : 'bg-zinc-900'}`}
+                      onClick={() => {
+                        setTheme('dark');
+                        setAccentColor('#BDE0FE');
+                      }}
+                      className={`flex items-center gap-2 justify-center p-3 brutal-border ${theme === 'dark' ? 'bg-primary text-primary-text' : 'bg-zinc-900'}`}
                     >
                       <Moon size={16} /> Dark
                     </button>
@@ -355,7 +379,7 @@ export default function App() {
                     <div className="flex-grow">
                       <span className="font-mono text-sm block uppercase tracking-tight">{accentColor}</span>
                       <button 
-                        onClick={() => setAccentColor('#BDE0FE')}
+                        onClick={() => setAccentColor(theme === 'light' ? '#000000' : '#BDE0FE')}
                         className="font-mono text-[10px] text-zinc-500 underline hover:text-primary transition-colors"
                       >
                         Reset to Default
@@ -396,7 +420,7 @@ export default function App() {
                     <div className="flex items-center justify-center gap-4 bg-zinc-900 border-2 border-primary p-2">
                       <button 
                         onClick={() => setDebugXpAmount(prev => Math.max(0, prev - 100))}
-                        className="p-2 hover:bg-primary hover:text-black transition-colors"
+                        className="p-2 hover:bg-primary hover:text-primary-text transition-colors"
                       >
                         <Minus size={20} />
                       </button>
@@ -410,7 +434,7 @@ export default function App() {
                       
                       <button 
                         onClick={() => setDebugXpAmount(prev => prev + 100)}
-                        className="p-2 hover:bg-primary hover:text-black transition-colors"
+                        className="p-2 hover:bg-primary hover:text-primary-text transition-colors"
                       >
                         <Plus size={20} />
                       </button>
@@ -422,7 +446,7 @@ export default function App() {
                           await addXP(user.uid, debugXpAmount);
                           setXp(prev => prev + debugXpAmount);
                         }}
-                        className="p-3 bg-zinc-900 border-2 border-primary text-primary font-mono text-xs uppercase hover:bg-primary hover:text-black transition-colors"
+                        className="p-3 bg-zinc-900 border-2 border-primary text-primary font-mono text-xs uppercase hover:bg-primary hover:text-primary-text transition-colors"
                       >
                         Add Points
                       </button>
@@ -431,7 +455,7 @@ export default function App() {
                           await addXP(user.uid, -debugXpAmount);
                           setXp(prev => Math.max(0, prev - debugXpAmount));
                         }}
-                        className="p-3 bg-zinc-900 border-2 border-primary text-primary font-mono text-xs uppercase hover:bg-primary hover:text-black transition-colors"
+                        className="p-3 bg-zinc-900 border-2 border-primary text-primary font-mono text-xs uppercase hover:bg-primary hover:text-primary-text transition-colors"
                       >
                         Subtract Points
                       </button>
@@ -504,7 +528,7 @@ export default function App() {
 
                 <button 
                   onClick={() => setIsHelpOpen(false)}
-                  className="w-full mt-4 p-4 bg-primary text-black font-display text-xl brutal-border shadow-[4px_4px_0px_0px_currentColor]"
+                  className="w-full mt-4 p-4 bg-primary text-primary-text font-display text-xl brutal-border shadow-[4px_4px_0px_0px_currentColor]"
                 >
                   GOT IT
                 </button>
@@ -592,7 +616,7 @@ export default function App() {
                   setShowPrivacyWarning(false);
                   localStorage.setItem(`privacy_warning_seen_${user?.uid}`, 'true');
                 }}
-                className="w-full p-4 bg-accent text-black font-display text-xl brutal-border shadow-[4px_4px_0px_0px_black]"
+                className="w-full p-4 bg-accent text-primary-text font-display text-xl brutal-border shadow-[4px_4px_0px_0px_currentColor]"
               >
                 Let's Do This!
               </button>
@@ -617,8 +641,8 @@ export default function App() {
               </div>
             </div>
             <div className="flex items-center gap-2 bg-primary px-3 py-1 brutal-border">
-               <Trophy size={14} className="text-black" />
-               <span className="font-mono font-bold text-xs text-black">LVL {level}</span>
+               <Trophy size={14} className="text-primary-text" />
+               <span className="font-mono font-bold text-xs text-primary-text">LVL {level}</span>
             </div>
             {user && (
               <button 
@@ -693,9 +717,14 @@ export default function App() {
                 />
                 <button
                   onClick={addTask}
-                  className="bg-primary text-black p-4 brutal-border hover:bg-accent transition-colors"
+                  disabled={isAddingTask}
+                  className="bg-primary text-primary-text p-4 brutal-border hover:bg-accent transition-colors disabled:opacity-50 flex items-center justify-center min-w-[60px]"
                 >
-                  <Plus size={24} strokeWidth={3} />
+                  {isAddingTask ? (
+                    <Loader2 size={24} className="animate-spin" strokeWidth={3} />
+                  ) : (
+                    <Plus size={24} strokeWidth={3} />
+                  )}
                 </button>
               </div>
 
@@ -738,7 +767,7 @@ export default function App() {
                     whileHover={{ scale: 1.1, rotate: 15 }}
                     whileTap={{ scale: 0.9 }}
                     onClick={startQuest}
-                    className="w-24 h-24 rounded-full bg-primary text-black flex items-center justify-center brutal-border hover:bg-accent transition-colors shadow-[6px_6px_0px_0px_rgba(255,255,255,1)]"
+                    className="w-24 h-24 rounded-full bg-primary text-primary-text flex items-center justify-center brutal-border hover:bg-accent transition-colors shadow-[6px_6px_0px_0px_currentColor]"
                   >
                     <Zap size={40} fill="currentColor" />
                   </motion.button>
@@ -835,7 +864,7 @@ export default function App() {
               className="space-y-8"
             >
               <div 
-                className="text-black p-8 brutal-border"
+                className="text-primary-text p-8 brutal-border"
                 style={{ backgroundColor: selectedTask?.rarity ? RARITIES[selectedTask.rarity].color : '#FFF' }}
               >
                 <h2 className="font-display text-4xl mb-2 italic">QUEST ACTIVATED</h2>
@@ -862,14 +891,14 @@ export default function App() {
 
               <div className="flex flex-col gap-4 pt-10">
                 <button
-                  className="bg-accent text-black font-display text-xl p-4 flex items-center justify-center gap-2 brutal-border"
+                  className="bg-accent text-primary-text font-display text-xl p-4 flex items-center justify-center gap-2 brutal-border"
                   onClick={completeQuest}
                 >
                   <CheckCircle2 size={24} />
                   QUEST COMPLETE (+{selectedTask?.rarity ? RARITIES[selectedTask.rarity].xp : 20} XP)
                 </button>
                 <button
-                  className="text-zinc-500 font-mono text-sm uppercase hover:text-white flex items-center justify-center gap-2"
+                  className="text-zinc-500 font-mono text-sm uppercase hover:text-brutal-text flex items-center justify-center gap-2"
                   onClick={reset}
                 >
                   <RotateCcw size={16} />

@@ -65,15 +65,16 @@ export async function getLeaderboard() {
   const usersRef = collection(db, 'users');
   const q = query(
     usersRef, 
-    where('hiddenFromLeaderboard', '==', false),
     orderBy('xp', 'desc')
   );
   
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({
+  const allUsers = querySnapshot.docs.map(doc => ({
     id: doc.id,
     ...doc.data()
-  }));
+  })) as any[];
+  
+  return allUsers.filter(u => !u.hiddenFromLeaderboard);
 }
 
 export async function addTaskToDB(uid: string, text: string, rarity: string) {

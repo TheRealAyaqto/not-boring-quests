@@ -8,6 +8,7 @@
 
   --color-primary: var(--primary-color, #BDE0FE); /* Pastel Blue */
   --color-accent: var(--accent-color, #A2D2FF);  /* Deeper Pastel Blue */
+  --color-primary-text: var(--primary-text, #000000);
   --color-brutal-bg: #09090b;
   --color-brutal-text: #f4f4f5;
 }
@@ -21,8 +22,8 @@
 .light-mode {
   --color-brutal-bg: #ffffff;
   --color-brutal-text: #09090b;
-  --color-primary: #A2D2FF;
-  --color-accent: #BDE0FE;
+  --color-primary: var(--primary-color, #000000);
+  --color-accent: var(--accent-color, #333333);
 }
 
 .light-mode .bg-zinc-900 {
@@ -54,5 +55,5 @@
 }
 
 @utility primary-button {
-  @apply bg-primary text-black font-display text-xl px-8 py-4 hover:bg-accent transition-colors brutal-border shadow-[4px_4px_0px_0px_currentColor];
+  @apply bg-primary text-primary-text font-display text-xl px-8 py-4 hover:bg-accent transition-colors brutal-border shadow-[4px_4px_0px_0px_currentColor];
 }
