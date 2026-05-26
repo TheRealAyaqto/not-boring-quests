@@ -61,6 +61,15 @@ export async function updatePrivacySettings(uid: string, hidden: boolean) {
   });
 }
 
+export async function getAllUsers() {
+  const usersRef = collection(db, 'users');
+  const querySnapshot = await getDocs(usersRef);
+  return querySnapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data()
+  })) as any[];
+}
+
 export async function getLeaderboard() {
   const usersRef = collection(db, 'users');
   const q = query(
@@ -74,7 +83,7 @@ export async function getLeaderboard() {
     ...doc.data()
   })) as any[];
   
-  return allUsers.filter(u => !u.hiddenFromLeaderboard);
+  return allUsers.filter(u => !u.hiddenFromLeaderboard && u.displayName !== 'Pixel Yoonie');
 }
 
 export async function addTaskToDB(uid: string, text: string, rarity: string) {

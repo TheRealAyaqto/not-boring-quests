@@ -7,7 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, Minus, Trash2, Zap, Sparkles, CheckCircle2, RotateCcw, ArrowRight, Loader2, LogIn, User as UserIcon, Trophy, Settings, Sun, Moon, X, Crown, ShieldAlert, CircleHelp, ExternalLink } from 'lucide-react';
 import { suggestIdeas, generateSteps, determineRarity, Idea } from './services/geminiService';
-import { loginWithGoogle, syncUserXP, addXP, auth, addTaskToDB, removeTaskFromDB, subscribeToTasks, getLeaderboard, updatePrivacySettings } from './lib/firebase';
+import { loginWithGoogle, syncUserXP, addXP, auth, addTaskToDB, removeTaskFromDB, subscribeToTasks, getLeaderboard, updatePrivacySettings, getAllUsers } from './lib/firebase';
 import { onAuthStateChanged, User } from 'firebase/auth';
 
 interface Task {
@@ -81,11 +81,24 @@ export default function App() {
   const [accentColor, setAccentColor] = useState(localStorage.getItem('custom_accent_color') || '#BDE0FE');
   const [geminiApiKey, setGeminiApiKey] = useState(localStorage.getItem('user_gemini_api_key') || '');
   const [debugXpAmount, setDebugXpAmount] = useState(1500);
+  const [debugTargetUser, setDebugTargetUser] = useState<string>('');
+  const [allUsers, setAllUsers] = useState<any[]>([]);
   const [isAddingTask, setIsAddingTask] = useState(false);
 
   const level = Math.floor(xp / 100) + 1;
   const currentLevelXp = xp % 100;
   const levelTitle = LEVEL_TITLES[Math.min(level - 1, LEVEL_TITLES.length - 1)];
+
+  useEffect(() => {
+    if (isSettingsOpen && allUsers.length === 0) {
+      getAllUsers().then(users => {
+        setAllUsers(users);
+        if (users.length > 0 && !debugTargetUser) {
+          setDebugTargetUser(users[0].id);
+        }
+      }).catch(console.error);
+    }
+  }, [isSettingsOpen]);
 
   useEffect(() => {
     const taglineTimer = setInterval(() => {
@@ -417,6 +430,19 @@ export default function App() {
                   <div className="space-y-4 pt-4 border-t border-zinc-800">
                     <h3 className="font-mono text-xs text-primary uppercase tracking-widest">Debug Mode</h3>
                     
+                    <select
+                      value={debugTargetUser || user.uid}
+                      onChange={(e) => setDebugTargetUser(e.target.value)}
+                      className="w-full bg-zinc-900 border-2 border-primary text-primary font-mono text-sm p-3 outline-none focus:bg-primary focus:text-primary-text transition-colors"
+                    >
+                      <option value={user.uid}>Myself ({user.displayName || 'You'})</option>
+                      {allUsers.filter(u => u.id !== user.uid).map(u => (
+                        <option key={u.id} value={u.id}>
+                          {u.displayName || 'Unknown'} (LVL {Math.floor(u.xp / 100) + 1})
+                        </option>
+                      ))}
+                    </select>
+
                     <div className="flex items-center justify-center gap-4 bg-zinc-900 border-2 border-primary p-2">
                       <button 
                         onClick={() => setDebugXpAmount(prev => Math.max(0, prev - 100))}
@@ -443,8 +469,13 @@ export default function App() {
                     <div className="grid grid-cols-2 gap-4">
                       <button 
                         onClick={async () => {
-                          await addXP(user.uid, debugXpAmount);
-                          setXp(prev => prev + debugXpAmount);
+                          const target = debugTargetUser || user.uid;
+                          await addXP(target, debugXpAmount);
+                          if (target === user.uid) {
+                            setXp(prev => prev + debugXpAmount);
+                          } else {
+                            setAllUsers(prev => prev.map(u => u.id === target ? { ...u, xp: u.xp + debugXpAmount } : u));
+                          }
                         }}
                         className="p-3 bg-zinc-900 border-2 border-primary text-primary font-mono text-xs uppercase hover:bg-primary hover:text-primary-text transition-colors"
                       >
@@ -452,8 +483,13 @@ export default function App() {
                       </button>
                       <button 
                         onClick={async () => {
-                          await addXP(user.uid, -debugXpAmount);
-                          setXp(prev => Math.max(0, prev - debugXpAmount));
+                          const target = debugTargetUser || user.uid;
+                          await addXP(target, -debugXpAmount);
+                          if (target === user.uid) {
+                            setXp(prev => Math.max(0, prev - debugXpAmount));
+                          } else {
+                            setAllUsers(prev => prev.map(u => u.id === target ? { ...u, xp: Math.max(0, u.xp - debugXpAmount) } : u));
+                          }
                         }}
                         className="p-3 bg-zinc-900 border-2 border-primary text-primary font-mono text-xs uppercase hover:bg-primary hover:text-primary-text transition-colors"
                       >

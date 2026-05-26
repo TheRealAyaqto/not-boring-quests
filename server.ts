@@ -182,12 +182,13 @@ async function startServer() {
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Task: "${task}"
-        Determine the "rarity" of this task. A boring, fast, or common household task is "Common". 
-        A slightly annoying or lengthy task is "Uncommon". 
-        A major project or chore that takes hours is "Rare". 
-        Something very difficult, life-changing, or taking weeks is "Epic". 
-        Something nearly impossible, legendary, or massively impactful is "Legendary".
-        Return only the rarity level name.`,
+        Determine the RPG "rarity" level of this task based on its effort, scale, and difficulty:
+        - "Common": Everyday chores and quick tasks (10-30 mins). e.g. wash dishes, send an email.
+        - "Uncommon": Moderate tasks requiring a bit of focus (1-3 hours). e.g. deep clean a room, write a short paper.
+        - "Rare": Major projects taking a full day or weekend. e.g. fix the car, organize the garage, build a small website.
+        - "Epic": Huge milestones taking weeks or months. e.g. learn a language, get a new job, run a marathon.
+        - "Legendary": Monumental, massively impactful, or life-changing achievements. e.g. build a top-10 app, write a bestselling novel, start a successful business, climb Everest.
+        Return only the exact rarity level name.`,
         config: {
           responseMimeType: 'application/json',
           responseSchema: {
